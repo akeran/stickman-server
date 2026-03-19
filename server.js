@@ -62,7 +62,7 @@ wss.on('connection', (ws) => {
         status: 'waiting'
       };
       ws._room = code; ws._idx = 0;
-      send(ws, { t: 'created', code, yourIdx: 0, players: getPlayerList(code), mode: data.mode || 'coop' });
+      send(ws, { t: 'created', code, yourIdx: 0, players: getPlayerList(code), mode: d.mode || 'coop' });
     }
 
     else if (d.t === 'join') {
