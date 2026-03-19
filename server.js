@@ -1,8 +1,8 @@
 const { WebSocketServer } = require('ws');
 const http = require('http');
-
+ 
 const PORT = process.env.PORT || 3000;
-
+ 
 // Simple HTTP server (Railway needs this to stay alive)
 const httpServer = http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -12,18 +12,18 @@ const httpServer = http.createServer((req, res) => {
     players: [...wss.clients].length
   }));
 });
-
+ 
 // WebSocket Server
 const wss = new WebSocketServer({ server: httpServer });
-
+ 
 // Room storage: { roomCode: { host: ws, clients: [ws, ws], players: [...], status: 'waiting'|'started' } }
 const rooms = {};
-
+ 
 function genCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   return Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
 }
-
+ 
 function broadcast(room, data, exclude = null) {
   const msg = JSON.stringify(data);
   if (rooms[room]) {
@@ -35,13 +35,13 @@ function broadcast(room, data, exclude = null) {
     });
   }
 }
-
+ 
 function sendTo(ws, data) {
   if (ws && ws.readyState === 1) {
     ws.send(JSON.stringify(data));
   }
 }
-
+ 
 function removePlayer(ws) {
   // Find which room this ws belongs to
   for (const code in rooms) {
@@ -65,17 +65,17 @@ function removePlayer(ws) {
     }
   }
 }
-
+ 
 wss.on('connection', (ws) => {
   console.log('Client connected, total:', wss.clients.size);
   ws._room = null;
-
+ 
   ws.on('message', (raw) => {
     let data;
     try { data = JSON.parse(raw); } catch { return; }
-
+ 
     const { t } = data;
-
+ 
     // ===== CREATE ROOM (HOST) =====
     if (t === 'create_room' || t === 'create') {
       const code = genCode();
@@ -90,7 +90,7 @@ wss.on('connection', (ws) => {
       sendTo(ws, { t: 'created', code, yourIdx: 0 });
       console.log(`Room ${code} created by ${data.name}`);
     }
-
+ 
     // ===== JOIN ROOM =====
     else if (t === 'join_room' || t === 'join') {
       const code = data.code;
@@ -98,23 +98,23 @@ wss.on('connection', (ws) => {
       if (!room) { sendTo(ws, { t: 'join_fail', reason: 'Room tidak ada!' }); return; }
       if (room.status === 'started') { sendTo(ws, { t: 'join_fail', reason: 'Game sudah berjalan!' }); return; }
       if (room.players.length >= 3) { sendTo(ws, { t: 'join_fail', reason: 'Room penuh!' }); return; }
-
+ 
       const idx = room.players.length;
       room.clients.push(ws);
       room.players.push({ name: data.name || `Player${idx + 1}`, idx, ws });
       ws._room = code;
       ws._idx = idx;
-
+ 
       const list = room.players.map(p => ({ name: p.name, idx: p.idx }));
       // Tell joiner their index + player list
       sendTo(ws, { t: 'joined', yourIdx: idx, code, players: list });
-      // Tell everyone the updated list
-      broadcast(code, { t: 'player_list', players: list }, ws);
-      // Tell host someone joined
-      sendTo(room.host, { t: 'player_joined', name: data.name, idx, players: list }); // also handled by player_list
+      // Tell everyone the updated list (including host)
+      broadcast(code, { t: 'player_list', players: list }); // no exclude - everyone gets it
+      // Also send direct notification to host
+      sendTo(room.host, { t: 'player_joined', name: data.name, idx, players: list });
       console.log(`${data.name} joined room ${code} as player ${idx}`);
     }
-
+ 
     // ===== START GAME (HOST ONLY) =====
     else if (t === 'start_game' || t === 'start') {
       const code = ws._room;
@@ -125,7 +125,7 @@ wss.on('connection', (ws) => {
       broadcast(code, { t: 'start', players: fpl });
       console.log(`Game started in room ${code}`);
     }
-
+ 
     // ===== IN-GAME ACTIONS (spawn unit, cannon, etc) =====
     else if (t === 'action') {
       const code = ws._room;
@@ -133,23 +133,23 @@ wss.on('connection', (ws) => {
       // Relay to all OTHER players in the room
       broadcast(code, { t: 'action', action: data.action, from: ws._idx }, ws);
     }
-
+ 
     // ===== PING =====
     else if (t === 'ping') {
       sendTo(ws, { t: 'pong' });
     }
   });
-
+ 
   ws.on('close', () => {
     removePlayer(ws);
     console.log('Client disconnected, total:', wss.clients.size);
   });
-
+ 
   ws.on('error', () => {
     removePlayer(ws);
   });
 });
-
+ 
 // Cleanup empty rooms every 5 minutes
 setInterval(() => {
   for (const code in rooms) {
@@ -160,7 +160,7 @@ setInterval(() => {
     }
   }
 }, 5 * 60 * 1000);
-
+ 
 httpServer.listen(PORT, () => {
   console.log(`✅ Stick Man Unit Server running on port ${PORT}`);
 });
