@@ -62,7 +62,7 @@ wss.on('connection', (ws) => {
         status: 'waiting'
       };
       ws._room = code; ws._idx = 0;
-      send(ws, { t: 'created', code, yourIdx: 0, players: getPlayerList(code) });
+      send(ws, { t: 'created', code, yourIdx: 0, players: getPlayerList(code), mode: data.mode || 'coop' });
     }
 
     else if (d.t === 'join') {
@@ -77,9 +77,9 @@ wss.on('connection', (ws) => {
       ws._room = d.code; ws._idx = idx;
 
       // Tell joiner: welcome + full player list
-      send(ws, { t: 'joined', yourIdx: idx, players: getPlayerList(d.code) });
+      send(ws, { t: 'joined', yourIdx: idx, players: getPlayerList(d.code), mode: rooms[d.code].mode || 'coop' });
       // Tell EVERYONE (including host) the new player list
-      broadcast(d.code, { t: 'sync', players: getPlayerList(d.code) });
+      broadcast(d.code, { t: 'sync', players: getPlayerList(d.code), mode: rooms[d.code].mode || 'coop' });
     }
 
     else if (d.t === 'start') {
